@@ -62,12 +62,28 @@ def run(train_dataset, dev_dataset, max_iter=1, device='cpu', plot=True, sample=
         sample_from_trained_model(model)
 
 def cpu_gpu_comparison(train_dataset, dev_dataset, max_iter=100):
+    print("Running CPU training...")
     run(train_dataset, dev_dataset, max_iter=max_iter, device='cpu', plot=False, sample=False)
-    run(train_dataset, dev_dataset, max_iter=max_iter, device='cuda', plot=False, sample=False)
+    
+    print("Attempting GPU training...")
+    try:
+        run(train_dataset, dev_dataset, max_iter=max_iter, device='cuda', plot=False, sample=False)
+    except AssertionError as e:
+        if "CUDA enabled" in str(e):
+            print("CUDA not available on this system. Skipping GPU comparison.")
+        else:
+            raise e
 
 
 def gpu_full_run(train_dataset, dev_dataset, max_iter=20000):
-    run(train_dataset, dev_dataset, max_iter=max_iter, device='cuda', plot=True, sample=True)
+    try:
+        run(train_dataset, dev_dataset, max_iter=max_iter, device='cuda', plot=True, sample=True)
+    except AssertionError as e:
+        if "CUDA enabled" in str(e):
+            print("CUDA not available on this system. Running on CPU instead.")
+            run(train_dataset, dev_dataset, max_iter=max_iter, device='cpu', plot=True, sample=True)
+        else:
+            raise e
 
 
 if __name__ == '__main__':
@@ -83,5 +99,5 @@ if __name__ == '__main__':
 
     # TODO: run the full training on gpu
     # uncomment the following line to run
-    # gpu_full_run(train_d, dev_d, max_iter=20000)
+    gpu_full_run(train_d, dev_d, max_iter=20000)
 
