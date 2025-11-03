@@ -1,0 +1,22 @@
+/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/huggingface_hub/file_download.py:945: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+  warnings.warn(
+Some weights of DistilBertForSequenceClassification were not initialized from the model checkpoint at distilbert-base-uncased and are newly initialized: ['classifier.bias', 'classifier.weight', 'pre_classifier.bias', 'pre_classifier.weight']
+You should probably TRAIN this model on a down-stream task to be able to use it for predictions and inference.
+Specified arguments: Namespace(small_subset=False, num_epochs=30, lr=5e-05, batch_size=64, device=None, model='distilbert-base-uncased')
+Auto-detected MPS (Mac GPU) device
+Loading the dataset ...
+Slicing the data...
+Size of the loaded dataset:
+ - train: 8000
+ - dev: 3270
+ - test: 1427
+Loading the tokenizer...
+Loding the data into DS...
+ >>>>>>>> Initializing the data loaders ... 
+Loading the model ...
+Moving model to device ...mps
+ >>>>>>>>  Starting training ... 
+ >>>>>>>>  Initializing optimizer
+Epoch 1 training:
+0it [00:00, ?it/s]1it [00:00,  2.66it/s]2it [00:00,  3.16it/s]3it [00:00,  3.37it/s]4it [00:01,  3.47it/s]5it [00:01,  3.55it/s]6it [00:01,  3.59it/s]7it [00:02,  3.62it/s]8it [00:02,  3.66it/s]9it [00:02,  3.64it/s]10it [00:02,  3.66it/s]11it [00:03,  2.91it/s]12it [00:03,  2.63it/s]13it [00:04,  2.45it/s]14it [00:04,  2.29it/s]15it [00:05,  2.03it/s]16it [00:06,  1.88it/s]17it [00:06,  1.65it/s]18it [00:07,  1.44it/s]19it [00:08,  1.36it/s]20it [00:09,  1.34it/s]21it [00:10,  1.33it/s]22it [00:10,  1.30it/s]23it [00:11,  1.30it/s]24it [00:12,  1.28it/s]25it [00:13,  1.24it/s]26it [00:14,  1.19it/s]27it [00:15,  1.18it/s]28it [00:15,  1.17it/s]29it [00:16,  1.10it/s]30it [00:17,  1.10it/s]31it [00:18,  1.13it/s]32it [00:19,  1.13it/s]33it [00:20,  1.13it/s]34it [00:21,  1.16it/s]35it [00:22,  1.16it/s]36it [00:23,  1.15it/s]37it [00:23,  1.14it/s]38it [00:24,  1.14it/s]39it [00:25,  1.12it/s]40it [00:26,  1.11it/s]41it [00:27,  1.09it/s]42it [00:28,  1.02it/s]43it [00:29,  1.01s/it]/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/multiprocessing/resource_tracker.py:254: UserWarning: resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown
+  warnings.warn('resource_tracker: There appear to be %d '

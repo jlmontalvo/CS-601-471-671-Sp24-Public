@@ -25,7 +25,8 @@ class CustomModelforSequenceClassification(nn.Module):
         self.model = AutoModel.from_pretrained(model_name)
         self.type = type
         self.num_labels = num_labels
-        self.prefix = torch.nn.Parameter(torch.randn(prefix_length, self.model.config.hidden_size, requires_grad=True).to('cuda'))
+        # Initialize prefix on CPU; it will be moved to the correct device when model.to(device) is called
+        self.prefix = torch.nn.Parameter(torch.randn(prefix_length, self.model.config.hidden_size, requires_grad=True))
         self.classifier = nn.Linear(self.model.config.hidden_size, num_labels)
 
     def forward(self, input_ids, attention_mask):
@@ -69,7 +70,7 @@ class CustomModelforSequenceClassification(nn.Module):
             # Hint: check torch.cat for how to concatenate the tensors
 
             # move the input embeddings to the gpu
-            # Hint: use .to(device='cuda') to move the tensor to the gpu
+            # Hint: use .to(device=device) to move the tensor to the device (MPS on Mac, CUDA on Linux/Windows)
             # name the final tensor as `inputs_embeds`
 
             
@@ -99,14 +100,23 @@ def print_gpu_memory():
     Print the amount of GPU memory used by the current process
     This is useful for debugging memory issues on the GPU
     """
-    # check if gpu is available
-    if torch.cuda.is_available():
+    # check if MPS (Mac) is available
+    if torch.backends.mps.is_available():
+        print("Using Metal Performance Shaders (MPS) on Mac")
+        # MPS doesn't have the same memory reporting as CUDA
+        print("MPS memory reporting is limited - using device for acceleration")
+    # check if CUDA is available (for Linux/Windows)
+    elif torch.cuda.is_available():
         print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
         print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
         print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-
-        p = subprocess.check_output('nvidia-smi')
-        print(p.decode("utf-8"))
+        try:
+            p = subprocess.check_output('nvidia-smi')
+            print(p.decode("utf-8"))
+        except:
+            pass  # nvidia-smi not available
+    else:
+        print("Using CPU - no GPU acceleration available")
 
 
 class BoolQADataset(torch.utils.data.Dataset):
@@ -441,7 +451,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=5)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default=None, help="Device to use: 'mps' for Mac, 'cuda' for NVIDIA GPU, 'cpu' for CPU. Auto-detects if not specified.")
     parser.add_argument("--model", type=str, default="bert-base-uncased")
     parser.add_argument("--type", type=str, default="auto", choices=["auto", "full", "head", "prefix"], help="type of tuning to perform on the model")
     parser.add_argument("--prefix_length", type=int, default=128)
@@ -451,6 +461,19 @@ if __name__ == "__main__":
     assert type(args.small_subset) == bool, "small_subset must be a boolean"
     global prefix_length
     prefix_length = args.prefix_length
+    
+    # Auto-detect device if not specified
+    if args.device is None:
+        if torch.backends.mps.is_available():
+            args.device = "mps"
+            print("Auto-detected MPS (Mac GPU) device")
+        elif torch.cuda.is_available():
+            args.device = "cuda"
+            print("Auto-detected CUDA device")
+        else:
+            args.device = "cpu"
+            print("Using CPU device")
+    
     #load the data and models
     pretrained_model, train_dataloader, validation_dataloader, test_dataloader = pre_process(args.model,
                                                                                              args.batch_size,

@@ -16,14 +16,23 @@ def print_gpu_memory():
     Print the amount of GPU memory used by the current process
     This is useful for debugging memory issues on the GPU
     """
-    # check if gpu is available
-    if torch.cuda.is_available():
+    # check if MPS (Mac) is available
+    if torch.backends.mps.is_available():
+        print("Using Metal Performance Shaders (MPS) on Mac")
+        # MPS doesn't have the same memory reporting as CUDA
+        print("MPS memory reporting is limited - using device for acceleration")
+    # check if CUDA is available (for Linux/Windows)
+    elif torch.cuda.is_available():
         print("torch.cuda.memory_allocated: %fGB" % (torch.cuda.memory_allocated(0) / 1024 / 1024 / 1024))
         print("torch.cuda.memory_reserved: %fGB" % (torch.cuda.memory_reserved(0) / 1024 / 1024 / 1024))
         print("torch.cuda.max_memory_reserved: %fGB" % (torch.cuda.max_memory_reserved(0) / 1024 / 1024 / 1024))
-
-        p = subprocess.check_output('nvidia-smi')
-        print(p.decode("utf-8"))
+        try:
+            p = subprocess.check_output('nvidia-smi')
+            print(p.decode("utf-8"))
+        except:
+            pass  # nvidia-smi not available
+    else:
+        print("Using CPU - no GPU acceleration available")
 
 
 class BoolQADataset(torch.utils.data.Dataset):
@@ -84,33 +93,32 @@ def evaluate_model(model, dataloader, device):
     :return accuracy
     """
 
-    # load metrics
-    dev_accuracy = evaluate.load('accuracy')
+    # load metrics - using sklearn accuracy as fallback since evaluate library has issues
+    from sklearn.metrics import accuracy_score
+    all_predictions = []
+    all_references = []
 
     # turn model into evaluation mode
     model.eval()
 
     # iterate over the dataloader
-    for batch in dataloader:
-        # TODO: implement the evaluation function
-        raise NotImplementedError("You need to implement the evaluation function")
-        # get the input_ids, attention_mask from the batch and put them on the device
-        # Hints:
-        # - see the getitem function in the BoolQADataset class for how to access the input_ids and attention_mask
-        # - use to() to move the tensors to the device
-
-
-        # forward pass
-        # name the output as `output`
-
-        # your code ends here
-
-        predictions = output.logits
-        predictions = torch.argmax(predictions, dim=1)
-        dev_accuracy.add_batch(predictions=predictions, references=batch['labels'])
+    with torch.no_grad():
+        for batch in dataloader:
+            # get the input_ids, attention_mask from the batch and put them on the device
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            
+            # forward pass
+            output = model(input_ids=input_ids, attention_mask=attention_mask)
+            
+            predictions = output.logits
+            predictions = torch.argmax(predictions, dim=1)
+            all_predictions.extend(predictions.cpu().numpy())
+            all_references.extend(batch['labels'].numpy())
 
     # compute and return metrics
-    return dev_accuracy.compute()
+    accuracy = accuracy_score(all_references, all_predictions)
+    return {'accuracy': accuracy}
 
 
 def train(mymodel, num_epochs, train_dataloader, validation_dataloader, test_dataloder, device, lr, small_subset=False):
@@ -150,60 +158,46 @@ def train(mymodel, num_epochs, train_dataloader, validation_dataloader, test_dat
         # since we put the model into eval mode during validation)
         mymodel.train()
 
-        # load metrics
-        train_accuracy = evaluate.load('accuracy')
+        # load metrics - using sklearn for accuracy
+        from sklearn.metrics import accuracy_score
+        all_train_predictions = []
+        all_train_references = []
 
         print(f"Epoch {epoch + 1} training:")
 
         for i, batch in tqdm(enumerate(train_dataloader)):
-
-            """
-            You need to make some changes here to make this function work.
-            Specifically, you need to: 
-            Extract the input_ids, attention_mask, and labels from the batch; then send them to the device. 
-            Then, pass the input_ids and attention_mask to the model to get the logits.
-            Then, compute the loss using the logits and the labels.
-            Then, call loss.backward() to compute the gradients.
-            Then, call optimizer.step()  to update the model parameters.
-            Then, call lr_scheduler.step() to update the learning rate.
-            Then, call optimizer.zero_grad() to reset the gradients for the next iteration.
-            """
-
-            # TODO: implement the training loop
-            raise NotImplementedError("You need to implement this function")
-
             # get the input_ids, attention_mask, and labels from the batch and put them on the device
-            # Hints: similar to the evaluate_model function
-
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+            labels = batch['labels'].to(device)
 
             # forward pass
-            # name the output as `output`
-            # Hints: refer to the evaluate_model function on how to get the predictions (logits)
-
+            output = mymodel(input_ids=input_ids, attention_mask=attention_mask)
+            predictions = output.logits
 
             # compute the loss using the loss function
-
+            loss_value = loss(predictions, labels)
 
             # loss backward
-
+            loss_value.backward()
 
             # update the model parameters with optimizer and lr_scheduler step
-
-
+            optimizer.step()
+            lr_scheduler.step()
+            
             # zero the gradients
+            optimizer.zero_grad()
 
-            # your code ends here
-
-            predictions = torch.argmax(predictions, dim=1)
-
-            # update metrics
-            train_accuracy.add_batch(predictions=predictions, references=batch['labels'])
+            # compute predictions for accuracy
+            pred_labels = torch.argmax(predictions, dim=1)
+            all_train_predictions.extend(pred_labels.cpu().numpy())
+            all_train_references.extend(batch['labels'].numpy())
             
         # print evaluation metrics
         print(f" ===> Epoch {epoch + 1}")
-        train_acc = train_accuracy.compute()
+        train_acc = accuracy_score(all_train_references, all_train_predictions)
         print(f" - Average training metrics: accuracy={train_acc}")
-        train_acc_list.append(train_acc['accuracy'])
+        train_acc_list.append(train_acc)
 
         # normally, validation would be more useful when training for many epochs
         val_accuracy = evaluate_model(mymodel, validation_dataloader, device)
@@ -300,13 +294,25 @@ if __name__ == "__main__":
     parser.add_argument("--num_epochs", type=int, default=1)
     parser.add_argument("--lr", type=float, default=5e-5)
     parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--device", type=str, default="cuda")
+    parser.add_argument("--device", type=str, default=None, help="Device to use: 'mps' for Mac, 'cuda' for NVIDIA GPU, 'cpu' for CPU. Auto-detects if not specified.")
     parser.add_argument("--model", type=str, default="distilbert-base-uncased")
 
     args = parser.parse_args()
     print(f"Specified arguments: {args}")
 
     assert type(args.small_subset) == bool, "small_subset must be a boolean"
+
+    # Auto-detect device if not specified
+    if args.device is None:
+        if torch.backends.mps.is_available():
+            args.device = "mps"
+            print("Auto-detected MPS (Mac GPU) device")
+        elif torch.cuda.is_available():
+            args.device = "cuda"
+            print("Auto-detected CUDA device")
+        else:
+            args.device = "cpu"
+            print("Using CPU device")
 
     # load the data and models
     pretrained_model, train_dataloader, validation_dataloader, test_dataloader = pre_process(args.model,
