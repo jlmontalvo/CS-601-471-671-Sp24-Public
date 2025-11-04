@@ -273,9 +273,11 @@ def pre_process(model_name, batch_size, device, small_subset):
     )
 
     print(" >>>>>>>> Initializing the data loaders ... ")
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size)
-    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size)
-    test_dataloader = DataLoader(test_dataset, batch_size=batch_size)
+    # use pinned memory and multiple workers when using CUDA for better throughput
+    pin_mem = (device.type == "cuda") if hasattr(device, "type") else (str(device) == "cuda")
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, pin_memory=pin_mem, num_workers=4)
+    validation_dataloader = DataLoader(validation_dataset, batch_size=batch_size, pin_memory=pin_mem, num_workers=2)
+    test_dataloader = DataLoader(test_dataset, batch_size=batch_size, pin_memory=pin_mem, num_workers=2)
 
     # from Hugging Face (transformers), read their documentation to do this.
     print("Loading the model ...")
@@ -313,20 +315,29 @@ if __name__ == "__main__":
         else:
             args.device = "cpu"
             print("Using CPU device")
+    # convert to a torch.device object for all .to(...) calls
+    device = torch.device(args.device)
+    print("Using torch.device:", device)
+    if device.type == "cuda":
+        # enable cuDNN autotuner to select best conv algorithms for your hardware
+        torch.backends.cudnn.benchmark = True
+        print("CUDA available:", torch.cuda.is_available())
+        try:
+            print("GPU name:", torch.cuda.get_device_name(0))
+        except Exception:
+            pass
 
-    # load the data and models
-    pretrained_model, train_dataloader, validation_dataloader, test_dataloader = pre_process(args.model,
-                                                                                             args.batch_size,
-                                                                                             args.device,
-                                                                                             args.small_subset)
+    # load the data and models (pass torch.device)
+    pretrained_model, train_dataloader, validation_dataloader, test_dataloader = pre_process(
+        args.model, args.batch_size, device, args.small_subset)
     print(" >>>>>>>>  Starting training ... ")
-    train(pretrained_model, args.num_epochs, train_dataloader, validation_dataloader, test_dataloader, args.device, args.lr, args.small_subset)
+    train(pretrained_model, args.num_epochs, train_dataloader, validation_dataloader, test_dataloader, device, args.lr, args.small_subset)
     
     # print the GPU memory usage just to make sure things are alright
     print_gpu_memory()
 
-    val_accuracy = evaluate_model(pretrained_model, validation_dataloader, args.device)
+    val_accuracy = evaluate_model(pretrained_model, validation_dataloader, device)
     print(f" - Average DEV metrics: accuracy={val_accuracy}")
 
-    test_accuracy = evaluate_model(pretrained_model, test_dataloader, args.device)
+    test_accuracy = evaluate_model(pretrained_model, test_dataloader, device)
     print(f" - Average TEST metrics: accuracy={test_accuracy}")

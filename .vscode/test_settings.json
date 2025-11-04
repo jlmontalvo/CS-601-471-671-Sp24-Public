@@ -1,0 +1,41 @@
+{
+    "tests": [
+        {
+            "name": "test_hyperparameter_selection",
+            "description": "Test hyperparameter selection for learning rates and epochs.",
+            "input": {
+                "learning_rates": [1e-4, 5e-4, 1e-3],
+                "epochs": [7, 9]
+            },
+            "expected_output": {
+                "best_accuracy": "float", // Replace with expected accuracy
+                "best_hyperparameters": {
+                    "learning_rate": "float", // Replace with expected learning rate
+                    "epochs": "int" // Replace with expected epochs
+                }
+            }
+        },
+        {
+            "name": "test_model_evaluation",
+            "description": "Test evaluation of different models and generate bar plot.",
+            "input": {
+                "models": [
+                    "distilBERT-base-uncased",
+                    "BERT-base-uncased",
+                    "BERT-large-uncased",
+                    "BERT-base-cased",
+                    "BERT-large-cased",
+                    "RoBERTa-base",
+                    "RoBERTa-large"
+                ]
+            },
+            "expected_output": {
+                "accuracies": {
+                    "dev": "list of floats", // Replace with expected dev accuracies
+                    "test": "list of floats" // Replace with expected test accuracies
+                },
+                "bar_plot": "path/to/bar_plot.png" // Replace with expected plot path
+            }
+        }
+    ]
+}
